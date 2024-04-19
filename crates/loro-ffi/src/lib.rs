@@ -1,8 +1,8 @@
 #![allow(clippy::missing_safety_doc)]
 
+use loro_internal::{HandlerTrait, LoroDoc, TextHandler};
 use std::ffi::{c_char, CStr, CString};
-
-use loro_internal::{LoroDoc, TextHandler};
+use std::slice;
 
 /// create Loro with a random unique client id
 #[no_mangle]
@@ -56,4 +56,43 @@ pub unsafe extern "C" fn text_value(text: *mut TextHandler) -> *mut c_char {
     let text = text.as_mut().unwrap();
     let value = text.get_value().as_string().unwrap().to_string();
     CString::new(value).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn loro_import(loro: *mut LoroDoc, data: *const u8, len: usize) -> bool {
+    assert!(!loro.is_null());
+    assert!(!data.is_null());
+
+    let data_slice = slice::from_raw_parts(data, len);
+
+    match loro.as_mut().unwrap().import(data_slice) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn loro_export_snapshot(
+    loro: *mut LoroDoc,
+    out_data: *mut *mut u8,
+    out_len: *mut usize,
+) {
+    assert!(!loro.is_null());
+    assert!(!out_data.is_null());
+    assert!(!out_len.is_null());
+
+    let snapshot = loro.as_ref().unwrap().export_snapshot();
+    let len = snapshot.len();
+    let ptr = Box::into_raw(snapshot.into_boxed_slice()) as *mut u8;
+
+    *out_data = ptr;
+    *out_len = len;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn loro_free_snapshot(data: *mut u8, len: usize) {
+    if !data.is_null() {
+        let data_slice = slice::from_raw_parts_mut(data, len);
+        let _ = Box::from_raw(data_slice);
+    }
 }
